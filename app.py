@@ -207,8 +207,6 @@ with c1:
         st.session_state.history = ""
         clear_calc()
         st.rerun()
-with c2:
-    st.download_button("💾 텍스트로 저장", data=st.session_state.history, file_name="receipt.txt", mime="text/plain", use_container_width=True)
     with st.expander("📖 스마트 계산기 사용 설명서 보기"):
     st.markdown("""
     **1. 💸 N빵 계산 (더치페이)**
