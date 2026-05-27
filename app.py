@@ -207,7 +207,7 @@ with c1:
         st.session_state.history = ""
         clear_calc()
         st.rerun()
-    with st.expander("📖 스마트 계산기 사용 설명서 보기"):
+with st.expander("📖 스마트 계산기 사용 설명서 보기"):
     st.markdown("""
     **1. 💸 N빵 계산 (더치페이)**
     * 계산기 버튼으로 총액을 먼저 구하거나 화면에 입력된 상태에서, 인원수를 맞추고 **[N빵 계산]**을 누르면 1인당 얼마를 내야 하는지 정확히 나눠줍니다.
