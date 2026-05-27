@@ -1,149 +1,226 @@
 import streamlit as st
+import re
 import random
+import math
+import sympy as sp
 
-# --- 페이지 설정 ---
-st.set_page_config(page_title="스마트 계산기", page_icon="🔢", layout="centered")
+# --- 페이지 기본 설정 ---
+st.set_page_config(page_title="파티 계산기", page_icon="🎉", layout="centered")
 
-# --- 🤫 탑 시크릿 이스터에그 기능 (이름 궁합) ---
-# 사이드바나 보이지 않는 곳에 숨겨두어 아는 사람만 쓸 수 있는 재미 요소입니다!
-with st.sidebar.expander("🤫 비밀의 방 (이스터에그)"):
-    st.write("💘 이름으로 보는 운명의 궁합!")
-    name1 = st.text_input("나의 이름", key="egg_name1")
-    name2 = st.text_input("상대의 이름", key="egg_name2")
-    if name1 and name2:
-        # 이름 길이를 이용해 고정된 재미용 점수 생성 (항상 같은 결과가 나오도록 시드 고정)
-        random.seed(len(name1) + len(name2))
-        love_score = random.randint(50, 100)
-        st.write(f"❤️ **{name1}**님과 **{name2}**님의 궁합 점수는... **{love_score}점**입니다!")
+# --- Session State (상태 관리) 초기화 ---
+if "calc_state" not in st.session_state: st.session_state.calc_state = ""
+if "history" not in st.session_state: st.session_state.history = ""
 
-st.title("🔢 내 손안의 스마트 종합 계산기")
-st.markdown("사칙연산부터 생활 계산, 방정식, 무작위 뽑기까지 한곳에서 해결하세요!")
+safe_math_dict = {
+    "sin": lambda x: math.sin(math.radians(x)),
+    "cos": lambda x: math.cos(math.radians(x)),
+    "tan": lambda x: math.tan(math.radians(x)),
+    "sqrt": math.sqrt,
+    "π": math.pi
+}
+
+# --- 핵심 기능 로직 ---
+def add_to_calc(val):
+    if st.session_state.calc_state in ['Error', '방정식 문법 오류', '일반 수식 오류', '변수(x, y 등) 없음'] or any(x in st.session_state.calc_state for x in ["잭팟", "천사", "빨리", "="]):
+        st.session_state.calc_state = ""
+    st.session_state.calc_state += val
+
+def clear_calc():
+    st.session_state.calc_state = ""
+
+def calculate():
+    expr = st.session_state.calc_state
+    if not expr: return
+    
+    if expr in ['777', '1004', '8282']:
+        trigger_easter_egg(expr)
+        return
+        
+    try:
+        if re.match(r'^[\d\s\+\-\*\/\.\(\)sincotaqrpiπ]+$', expr):
+            result = eval(expr, {"__builtins__": None}, safe_math_dict)
+            if isinstance(result, float):
+                result = round(result, 10)
+                if result.is_integer(): result = int(result)
+            st.session_state.history = f"{expr} = {result:,}\n" + st.session_state.history
+            st.session_state.calc_state = str(result)
+        else:
+            st.session_state.calc_state = "일반 수식 오류"
+    except Exception:
+        st.session_state.calc_state = "Error"
+
+def trigger_easter_egg(egg_type):
+    if egg_type == '777':
+        st.session_state.calc_state = "🎰 잭팟! 💰"
+        st.balloons()
+    elif egg_type == '1004':
+        st.session_state.calc_state = "👼 천사 등장! ✨"
+        st.snow()
+    elif egg_type == '8282':
+        st.session_state.calc_state = "🚀 빨리빨리! 🔥"
+    st.session_state.history = f"*** 🎁 이스터에그: {egg_type} ***\n" + st.session_state.history
+
+# ★ 연립방정식 지원으로 업그레이드된 로직 ★
+def solve_equation():
+    expr = st.session_state.eq_input
+    if not expr: return
+    
+    try:
+        # 쉼표(,)를 기준으로 여러 방정식을 분리
+        eq_strings = expr.split(',')
+        eq_list = []
+        
+        for eq_str in eq_strings:
+            eq_str = eq_str.strip()
+            if '=' in eq_str:
+                left, right = eq_str.split('=', 1)
+                eq_list.append(sp.Eq(sp.sympify(left), sp.sympify(right)))
+            else:
+                eq_list.append(sp.Eq(sp.sympify(eq_str), 0))
+                
+        # 수식에 사용된 모든 변수(x, y 등)를 찾음
+        symbols = set()
+        for eq in eq_list:
+            symbols.update(eq.free_symbols)
+        symbols = list(symbols)
+        
+        if not symbols:
+            st.session_state.calc_state = "변수(x, y 등) 없음"
+            return
+            
+        # 연립방정식 풀이
+        solutions = sp.solve(eq_list, symbols)
+        
+        # 해(Solution) 결과를 텍스트로 예쁘게 변환
+        if not solutions:
+            formatted_result = "해가 없음"
+        elif isinstance(solutions, dict):
+            # 단일 해 {x: 1, y: 2} 형태
+            sol_parts = [f"{var} = {val}" for var, val in solutions.items()]
+            formatted_result = ", ".join(sol_parts)
+        elif isinstance(solutions, list):
+            # 2차 방정식 등 해가 여러 개일 때
+            if all(isinstance(s, dict) for s in solutions):
+                sol_strs = ["(" + ", ".join([f"{k}={v}" for k, v in s.items()]) + ")" for s in solutions]
+                formatted_result = " 또는 ".join(sol_strs)
+            elif all(isinstance(s, tuple) for s in solutions):
+                sol_strs = ["(" + ", ".join([f"{symbols[i]}={s[i]}" for i in range(len(symbols))]) + ")" for s in solutions]
+                formatted_result = " 또는 ".join(sol_strs)
+            else:
+                formatted_result = " 또는 ".join([str(s) for s in solutions])
+        else:
+            formatted_result = str(solutions)
+            
+        st.session_state.history = f"🧮 방정식: {expr} ➔ {formatted_result}\n" + st.session_state.history
+        st.session_state.calc_state = formatted_result
+    except Exception:
+        st.session_state.calc_state = "방정식 문법 오류"
+
+def do_nsplit():
+    try:
+        total = eval(st.session_state.calc_state, {"__builtins__": None}, safe_math_dict)
+        num_people = st.session_state.people_input
+        if total == 0: return
+        split_amount = round(total / num_people)
+        if isinstance(total, float) and total.is_integer(): total = int(total)
+        
+        st.session_state.history = f"💸 N빵: {total:,} / {num_people}명 = 1인당 {split_amount:,}\n" + st.session_state.history
+        st.session_state.calc_state = str(split_amount)
+        st.balloons() 
+    except Exception:
+        st.session_state.calc_state = "Error"
+
+def do_rand():
+    try:
+        min_v, max_v = st.session_state.r_min, st.session_state.r_max
+        if min_v > max_v: min_v, max_v = max_v, min_v
+            
+        if st.session_state.r_type == '정수': 
+            result = random.randint(int(min_v), int(max_v))
+        else: 
+            result = round(random.uniform(min_v, max_v), 4)
+            
+        st.session_state.history = f"🎲 랜덤 [{min_v} ~ {max_v}] = {result}\n" + st.session_state.history
+        st.session_state.calc_state = str(result)
+    except Exception:
+        st.session_state.calc_state = "Error"
+
+def btn_click(label):
+    if label == '=': calculate()
+    elif label == 'C': clear_calc()
+    elif label in ['sin', 'cos', 'tan']: add_to_calc(label + '(')
+    elif label == '√': add_to_calc('sqrt(')
+    else: add_to_calc(label)
+
+# --- UI 렌더링 ---
+st.title("🎉 파티 계산기 v8.0")
+st.markdown("웹 배포를 위한 **Streamlit 변환 버전**입니다! 스마트폰에서도 완벽하게 작동합니다.")
+
+st.info(f"**화면:** {st.session_state.calc_state}" if st.session_state.calc_state else "**화면:** 0", icon="📟")
+
+tab1, tab2, tab3 = st.tabs(["💸 N빵", "🎲 뽑기", "🧮 방정식"])
+
+with tab1:
+    c1, c2 = st.columns([2, 1])
+    with c1: st.number_input("인원(명)", min_value=2, max_value=100, value=2, step=1, key="people_input")
+    with c2: 
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.button("💸 N빵 계산", use_container_width=True, on_click=do_nsplit)
+
+with tab2:
+    c1, c2, c3, c4 = st.columns([1.5, 1.5, 1.5, 1.5])
+    with c1: st.number_input("최소값", value=1.0, key="r_min")
+    with c2: st.number_input("최대값", value=100.0, key="r_max")
+    with c3: st.selectbox("타입", ["정수", "실수"], key="r_type")
+    with c4: 
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.button("🎲 뽑기", use_container_width=True, on_click=do_rand)
+
+with tab3:
+    # ★ 안내 문구 변경 ★
+    st.text_input("방정식 입력 (연립은 쉼표로 구분. 예: x+y=10, x-y=2)", key="eq_input")
+    st.button("🧮 방정식 풀기", use_container_width=True, on_click=solve_equation)
 
 st.divider()
 
-# --- 메인 기능 선택 탭 ---
-# 사용자가 쉽게 이동할 수 있도록 직관적인 메뉴 탭으로 구성했습니다.
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "🧮 사칙연산", 
-    "📊 퍼센트 계산", 
-    "⚖️ 단위 변환", 
-    "💸 n빵(더치페이)", 
-    "📝 방정식 & 랜덤"
-])
+buttons = [
+    ['sin', 'cos', 'tan', 'π', 'C'],
+    ['√', '**', '(', ')', '/'],
+    ['7', '8', '9', '.', '*'],
+    ['4', '5', '6', '+', '-'],
+    ['1', '2', '3', '0', '=']
+]
 
-# --- [Tab 1] 일반 사칙연산 ---
-with tab1:
-    st.subheader("🧮 일반 사칙연산")
-    col1, col2 = st.columns(2)
-    with col1:
-        num1 = st.number_input("첫 번째 숫자", value=0.0, step=1.0, key="main_num1")
-    with col2:
-        num2 = st.number_input("두 번째 숫자", value=0.0, step=1.0, key="main_num2")
+for row in buttons:
+    cols = st.columns(5)
+    for i, label in enumerate(row):
+        cols[i].button(label, use_container_width=True, on_click=btn_click, args=(label,))
 
-    operator = st.selectbox("연산자 선택", ["더하기 (+)", "빼기 (-)", "곱하기 (×)", "나누기 (÷)"], key="main_op")
+st.divider()
 
-    if operator == "더하기 (+)":
-        st.success(f"✨ 결과: {num1} + {num2} = **{num1 + num2}**")
-    elif operator == "빼기 (-)":
-        st.success(f"✨ 결과: {num1} - {num2} = **{num1 - num2}**")
-    elif operator == "곱하기 (×)":
-        st.success(f"✨ 결과: {num1} × {num2} = **{num1 * num2}**")
-    elif operator == "나누기 (÷)":
-        if num2 == 0:
-            st.error("⚠️ 0으로 나눌 수 없습니다!")
-        else:
-            st.success(f"✨ 결과: {num1} ÷ {num2} = **{num1 / num2:.4f}**")
+st.subheader("📜 영수증 (History)")
+st.text_area("계산 내역 (최근 순)", value=st.session_state.history, height=150, disabled=True)
 
-# --- [Tab 2] 생활 속 퍼센트 계산 ---
-with tab2:
-    st.subheader("📊 생활 속 퍼센트 계산")
-    p_mode = st.selectbox("계산 방식 선택", ["전체 값의 몇 %는 얼마?", "전체 값에서 일부 값은 몇 %?"], key="pct_mode")
+c1, c2 = st.columns(2)
+with c1:
+    if st.button("🗑️ 영수증 지우기", use_container_width=True):
+        st.session_state.history = ""
+        clear_calc()
+        st.rerun()
+with c2:
+    st.download_button("💾 텍스트로 저장", data=st.session_state.history, file_name="receipt.txt", mime="text/plain", use_container_width=True)
+    with st.expander("📖 스마트 계산기 사용 설명서 보기"):
+    st.markdown("""
+    **1. 💸 N빵 계산 (더치페이)**
+    * 계산기 버튼으로 총액을 먼저 구하거나 화면에 입력된 상태에서, 인원수를 맞추고 **[N빵 계산]**을 누르면 1인당 얼마를 내야 하는지 정확히 나눠줍니다.
     
-    if p_mode == "전체 값의 몇 %는 얼마?":
-        total_val = st.number_input("전체 값", value=100.0, step=1.0, key="pct_t1")
-        target_pct = st.number_input("구하려는 퍼센트(%)", value=10.0, step=1.0, key="pct_p1")
-        st.success(f"✨ 결과: {total_val}의 {target_pct}%는 **{total_val * (target_pct / 100.0):.2f}**입니다.")
-        
-    elif p_mode == "전체 값에서 일부 값은 몇 %?":
-        total_val = st.number_input("전체 값", value=100.0, step=1.0, key="pct_t2")
-        part_val = st.number_input("일부 값", value=20.0, step=1.0, key="pct_p2")
-        if total_val == 0:
-            st.error("⚠️ 전체 값은 0이 될 수 없습니다.")
-        else:
-            st.success(f"✨ 결과: {total_val}에서 {part_val}은 **{(part_val / total_val) * 100.0:.2f}%**입니다.")
-
-# --- [Tab 3] 척척 단위 변환기 ---
-with tab3:
-    st.subheader("⚖️ 척척 단위 변환기")
-    u_mode = st.selectbox("변환 종류", ["길이 (cm ⇄ inch)", "무게 (kg ⇄ lb)"], key="unit_mode")
+    **2. 🎲 랜덤 뽑기**
+    * 최소/최대값을 설정하고 **[뽑기]**를 누르면 범위 안에서 랜덤한 숫자를 뱉어냅니다. 밥값 내기나 벌칙자를 정할 때 써보세요!
     
-    if u_mode == "길이 (cm ⇄ inch)":
-        direction = st.radio("변환 방향", ["cm ➔ inch", "inch ➔ cm"], key="len_dir")
-        val = st.number_input("길이 입력", value=1.0, step=1.0, key="len_in")
-        if direction == "cm ➔ inch":
-            st.success(f"✨ 결과: {val} cm = **{val * 0.393701:.2f} inch**")
-        else:
-            st.success(f"✨ 결과: {val} inch = **{val * 2.54:.2f} cm**")
-            
-    elif u_mode == "무게 (kg ⇄ lb)":
-        direction = st.radio("변환 방향", ["kg ➔ lb", "lb ➔ kg"], key="wt_dir")
-        val = st.number_input("무게 입력", value=1.0, step=1.0, key="wt_in")
-        if direction == "kg ➔ lb":
-            st.success(f"✨ 결과: {val} kg = **{val * 2.20462:.2f} lb**")
-        else:
-            st.success(f"✨ 결과: {val} lb = **{val * 0.453592:.2f} kg**")
-
-# --- [Tab 4] 정산의 신, n빵 계산기 ---
-with tab4:
-    st.subheader("💸 공평한 n빵(더치페이) 계산기")
-    total_money = st.number_input("총 결제 금액 (원)", min_value=0, value=50000, step=1000)
-    people_count = st.number_input("총 인원 수 (명)", min_value=1, value=4, step=1)
+    **3. 🧮 방정식 풀기 (연립방정식 지원)**
+    * **일반 방정식:** `x**2 - 5*x + 6 = 0` (파이썬 규칙상 곱셈은 반드시 `*` 기호를 써야 합니다.)
+    * **연립 방정식:** 식과 식 사이를 쉼표(`,`)로 구분하세요. (예: `x + y = 10, x - y = 2`)
     
-    if people_count > 0:
-        dutch_pay = total_money // people_count  # 깔끔하게 떨어지도록 정수 나눗셈
-        remainder = total_money % people_count
-        
-        st.info(f"🏃‍♂️ 1인당 내야 할 금액: **{dutch_pay:,} 원**")
-        if remainder > 0:
-            st.warning(f"💡 애매하게 남은 **{remainder} 원**은 결제자가 보너스로 내기로 해요! 😉")
-
-# --- [Tab 5] 일차방정식 수식 풀이 및 무작위 수 뽑기 ---
-with tab4 if False else tab5:  # 안전한 블록 분리용
-    st.subheader("📝 1차 방정식 풀이 ($ax + b = 0$)")
-    st.markdown("중학교 수학 시간에 배우는 일차방정식의 해를 구해줍니다.")
-    
-    col_a, col_b = st.columns(2)
-    with col_a:
-        a = st.number_input("상수 a 입력 (x의 계수)", value=2.0, step=1.0, key="eq_a")
-    with col_b:
-        b = st.number_input("상수 b 입력", value=-4.0, step=1.0, key="eq_b")
-        
-    if a == 0:
-        if b == 0:
-            st.warning("💡 해가 무수히 많습니다. (모든 숫자가 정답!)")
-        else:
-            st.error("⚠️ 해가 존재하지 않는 모순된 수식입니다. ($a$에 0이 아닌 수를 넣어주세요!)")
-    else:
-        # ax + b = 0 -> x = -b/a
-        equation_solution = -b / a
-        st.success(f"🍀 방정식 ${a}x + ({b}) = 0$의 해는 **$x = {equation_solution:.2f}$** 입니다!")
-        
-    st.divider()
-    
-    # --- 🎲 행운의 무작위 수(랜덤) 뽑기 ---
-    st.subheader("🎲 무작위 수(랜덤) 뽑기")
-    st.markdown("발표자 번호 뽑기나 제비뽑기할 때 사용해 보세요!")
-    
-    col_r1, col_r2 = st.columns(2)
-    with col_r1:
-        min_rand = st.number_input("시작 숫자(최소)", value=1, step=1)
-    with col_r2:
-        max_rand = st.number_input("끝 숫자(최대)", value=30, step=1)
-        
-    if min_rand > max_rand:
-        st.error("⚠️ 시작 숫자가 끝 숫자보다 클 수 없습니다!")
-    else:
-        if st.button("🎰 행운의 숫자 뽑기"):
-            picked_num = random.randint(int(min_rand), int(max_rand))
-            st.balloons()  # 축하 효과 펑!
-            st.success(f"🎉 당첨된 무작위 숫자는 바로 **[{picked_num}]** 입니다!")
+    **4. 🎁 숨겨진 이스터에그**
+    * 화면에 특정 숫자(`777`, `1004`, `8282`)를 입력하고 `=` 버튼을 누르면 화면에 특별한 이벤트가 발생합니다!
+    """)
