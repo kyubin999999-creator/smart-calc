@@ -5,7 +5,7 @@ import math
 import sympy as sp
 
 # --- 페이지 기본 설정 ---
-st.set_page_config(page_title="파티 계산기", page_icon="🎉", layout="centered")
+st.set_page_config(page_title="나만의 계산기", page_icon="🎉", layout="centered")
 
 # --- Session State (상태 관리) 초기화 ---
 if "calc_state" not in st.session_state: st.session_state.calc_state = ""
@@ -153,7 +153,7 @@ def btn_click(label):
     else: add_to_calc(label)
 
 # --- UI 렌더링 ---
-st.title("🎉 파티 계산기 v8.0")
+st.title("🎉 나만의 계산기 v8.0")
 st.markdown("웹 배포를 위한 **Streamlit 변환 버전**입니다! 스마트폰에서도 완벽하게 작동합니다.")
 
 st.info(f"**화면:** {st.session_state.calc_state}" if st.session_state.calc_state else "**화면:** 0", icon="📟")
@@ -220,5 +220,5 @@ with st.expander("📖 스마트 계산기 사용 설명서 보기"):
     * **연립 방정식:** 식과 식 사이를 쉼표(`,`)로 구분하세요. (예: `x + y = 10, x - y = 2`)
     
     **4. 🎁 숨겨진 이스터에그**
-    * 화면에 특정 숫자(`777`, `1004`, `8282`)를 입력하고 `=` 버튼을 누르면 화면에 특별한 이벤트가 발생합니다!
+    * 화면에 특정 숫자를 입력하고 `=` 버튼을 누르면 화면에 특별한 이벤트가 발생합니다!
     """)
